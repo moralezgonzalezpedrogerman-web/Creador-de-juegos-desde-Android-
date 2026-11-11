@@ -1,0 +1,83 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      game_dir:
+        description: "Carpeta del juego exportado desde P-Maker (p. ej. games/mi_juego) para crear el APK de ese juego"
+        required: false
+        default: ""
+      game_pack:
+        description: "(antiguo) Ruta de un .pack suelto para crear el APK de ese juego"
+        required: false
+        default: ""
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir
+        run: unzip -oq forge.zip
+      - name: Compilar y probar (nucleo, importadores, editor sin pantalla)
+        run: |
+          cmake -S tests -B build-tests -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-tests -j4
+          ctest --test-dir build-tests --output-on-failure
+
+  windows-runtime:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir
+        shell: bash
+        run: unzip -oq forge.zip || 7z x -y forge.zip && true
+      - name: Compilar runtime de Windows
+        run: |
+          cmake -S . -B build
+          cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forge_runtime
+          path: build/Release/forge_runtime.exe
+
+  android-apk:
+    needs: [tests, windows-runtime]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir
+        run: unzip -oq forge.zip
+      # El runtime de Windows viaja dentro del APK para exportar a .exe sin compilador.
+      - uses: actions/download-artifact@v4
+        with:
+          name: forge_runtime
+          path: android/app/src/main/assets
+      - name: Juego independiente (opcional)
+        if: ${{ github.event.inputs.game_dir != '' || github.event.inputs.game_pack != '' }}
+        run: |
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          if [ -n "${{ github.event.inputs.game_dir }}" ]; then
+            D="${{ github.event.inputs.game_dir }}"
+            cp "$D/game.pack" android/app/src/main/assets/game.pack
+            if [ -f "$D/icon.png" ]; then cp "$D/icon.png" android/app/src/main/res/drawable-nodpi/app_icon.png; fi
+            if [ -f "$D/apk.properties" ]; then echo "APK_PROPS=$GITHUB_WORKSPACE/$D/apk.properties" >> "$GITHUB_ENV"; fi
+          else
+            cp "${{ github.event.inputs.game_pack }}" android/app/src/main/assets/game.pack
+          fi
+          touch android/app/src/main/assets/standalone
+          # sin editor ni runtime de Windows: el APK solo lleva el juego
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+      - name: Compilar APK
+        run: gradle -p android assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ (github.event.inputs.game_dir != '' || github.event.inputs.game_pack != '') && 'game-apk' || 'forge-apk' }}
+          path: android/app/build/outputs/apk/debug/*.apk
