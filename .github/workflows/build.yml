@@ -36,18 +36,36 @@ jobs:
       - name: Compilar runtime de Windows
         run: |
           cmake -S . -B build
-          cmake --build build --config Release
+          cmake --build build --config Release --target forge_runtime -- /nologo /verbosity:minimal
       - uses: actions/upload-artifact@v4
         with:
           name: forge_runtime
           path: build/Release/forge_runtime.exe
-      # Editor completo para Windows: carpeta con pmaker_editor.exe + forge_runtime.exe (para exportar .exe)
+
+  # Editor completo para Windows. Va aparte: si falla, el APK se genera igual.
+  windows-editor:
+    needs: windows-runtime
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir
+        shell: bash
+        run: unzip -oq forge.zip || 7z x -y forge.zip && true
+      - uses: actions/download-artifact@v4
+        with:
+          name: forge_runtime
+          path: runtime
+      - name: Compilar editor de Windows
+        run: |
+          cmake -S . -B build
+          cmake --build build --config Release --target pmaker_editor -- /nologo /verbosity:minimal
       - name: Paquete del editor de Windows
         shell: bash
         run: |
           mkdir -p P-Maker-Windows
           cp build/Release/pmaker_editor.exe P-Maker-Windows/
-          cp build/Release/forge_runtime.exe P-Maker-Windows/
+          cp runtime/forge_runtime.exe P-Maker-Windows/
           echo "Abre pmaker_editor.exe. Los proyectos se guardan en Documentos\\P-Maker." > P-Maker-Windows/LEEME.txt
       - uses: actions/upload-artifact@v4
         with:
