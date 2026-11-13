@@ -41,6 +41,18 @@ jobs:
         with:
           name: forge_runtime
           path: build/Release/forge_runtime.exe
+      # Editor completo para Windows: carpeta con pmaker_editor.exe + forge_runtime.exe (para exportar .exe)
+      - name: Paquete del editor de Windows
+        shell: bash
+        run: |
+          mkdir -p P-Maker-Windows
+          cp build/Release/pmaker_editor.exe P-Maker-Windows/
+          cp build/Release/forge_runtime.exe P-Maker-Windows/
+          echo "Abre pmaker_editor.exe. Los proyectos se guardan en Documentos\\P-Maker." > P-Maker-Windows/LEEME.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P-Maker-Windows
+          path: P-Maker-Windows
 
   android-apk:
     needs: [tests, windows-runtime]
