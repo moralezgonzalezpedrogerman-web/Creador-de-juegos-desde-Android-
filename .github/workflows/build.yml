@@ -59,7 +59,15 @@ jobs:
       - name: Compilar editor de Windows
         run: |
           cmake -S . -B build
-          cmake --build build --config Release --target pmaker_editor -- /nologo /verbosity:minimal
+          cmake --build build --config Release --target pmaker_editor -- /nologo /verbosity:minimal 2>&1 | Tee-Object -FilePath editor_log.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            "## Errores del editor de Windows" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            Select-String -Path editor_log.txt -Pattern "error|LNK" | Select-Object -First 25 | ForEach-Object { $_.Line } | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            Write-Host "=== ERRORES ==="
+            Select-String -Path editor_log.txt -Pattern "error|LNK" | Select-Object -First 25 | ForEach-Object { Write-Host $_.Line }
+          }
+          exit $code
       - name: Paquete del editor de Windows
         shell: bash
         run: |
