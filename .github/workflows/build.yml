@@ -44,7 +44,8 @@ jobs:
 
   # Editor completo para Windows. Va aparte: si falla, el APK se genera igual.
   windows-editor:
-    needs: windows-runtime
+    needs: [windows-runtime, android-apk]
+    if: ${{ !cancelled() && needs.windows-runtime.result == 'success' }}
     runs-on: windows-latest
     continue-on-error: true
     steps:
@@ -56,6 +57,12 @@ jobs:
         with:
           name: forge_runtime
           path: runtime
+      # La plantilla del APK (la app de P-Maker) viaja con el editor para crear APKs instalables desde Windows.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: forge-apk
+          path: template
       - name: Compilar editor de Windows
         run: |
           cmake -S . -B build
@@ -74,7 +81,10 @@ jobs:
           mkdir -p P-Maker-Windows
           cp build/Release/pmaker_editor.exe P-Maker-Windows/
           cp runtime/forge_runtime.exe P-Maker-Windows/
-          echo "Abre pmaker_editor.exe. Los proyectos se guardan en Documentos\\P-Maker." > P-Maker-Windows/LEEME.txt
+          cp android/app/src/main/assets/apk_sign_key.pk8 android/app/src/main/assets/apk_sign_cert.der P-Maker-Windows/
+          T=$(ls template/*.apk 2>/dev/null | head -1)
+          if [ -n "$T" ]; then cp "$T" P-Maker-Windows/forge_template.apk; fi
+          echo "Abre pmaker_editor.exe. Los proyectos se guardan en Documentos\\P-Maker. Deja juntos todos los archivos de esta carpeta: forge_template.apk permite crear el APK instalable desde Exportar > Android." > P-Maker-Windows/LEEME.txt
       - uses: actions/upload-artifact@v4
         with:
           name: P-Maker-Windows
